@@ -1,7 +1,7 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {PostType} from '@mattermost/types/posts';
+import {Post, PostType} from '@mattermost/types/posts';
 
 export const PostTypes = {
     CHANNEL_DELETED: 'system_channel_deleted' as PostType,
@@ -15,6 +15,7 @@ export const PostTypes = {
 
     JOIN_LEAVE: 'system_join_leave' as PostType,
     JOIN_CHANNEL: 'system_join_channel' as PostType,
+    JOIN_LEAVE_CHANNEL: 'system_join_leave_channel' as PostType,
     GUEST_JOIN_CHANNEL: 'system_guest_join_channel' as PostType,
     LEAVE_CHANNEL: 'system_leave_channel' as PostType,
     ADD_REMOVE: 'system_add_remove' as PostType,
@@ -62,6 +63,7 @@ export default {
     ],
     USER_ACTIVITY_POST_TYPES: [
         PostTypes.ADD_TO_CHANNEL,
+        PostTypes.JOIN_LEAVE_CHANNEL,
         PostTypes.JOIN_CHANNEL,
         PostTypes.LEAVE_CHANNEL,
         PostTypes.REMOVE_FROM_CHANNEL,

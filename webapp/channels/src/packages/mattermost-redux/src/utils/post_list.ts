@@ -26,6 +26,7 @@ export const MAX_COMBINED_SYSTEM_POSTS = 100;
 
 export function shouldShowJoinLeaveMessages(state: GlobalState) {
     // This setting is true or not set if join/leave messages are to be displayed
+    // return false;
     return getBool(state, Preferences.CATEGORY_ADVANCED_SETTINGS, Preferences.ADVANCED_FILTER_JOIN_LEAVE, true);
 }
 
@@ -64,7 +65,7 @@ export function makeFilterPostsAndAddSeparators() {
             if (posts.length === 0 || !currentUser) {
                 return [];
             }
-
+            // console.log('posts1::',posts);
             const out: string[] = [];
             let lastDate;
             let addedNewMessagesIndicator = false;
@@ -120,6 +121,7 @@ export function makeFilterPostsAndAddSeparators() {
             }
 
             // Flip it back to newest to oldest
+            // console.log(out.reverse());
             return out.reverse();
         },
     );
@@ -127,7 +129,7 @@ export function makeFilterPostsAndAddSeparators() {
 
 export function makeCombineUserActivityPosts() {
     const getPostsForIds = makeGetPostsForIds();
-
+   
     return createIdsSelector(
         'makeCombineUserActivityPosts',
         (state: GlobalState, postIds: string[]) => postIds,
@@ -137,7 +139,8 @@ export function makeCombineUserActivityPosts() {
             let combinedCount = 0;
             const out: string[] = [];
             let changed = false;
-
+            // console.log('POSTS:',posts);
+            // console.log('POSTIDS:',postIds);
             for (let i = 0; i < postIds.length; i++) {
                 const postId = postIds[i];
 
@@ -181,7 +184,7 @@ export function makeCombineUserActivityPosts() {
                 // Nothing was combined, so return the original array
                 return postIds;
             }
-
+            // console.log('OUT',out);
             return out;
         },
     );
@@ -273,6 +276,7 @@ export function getLastPostIndex(postIds: string[]) {
 export function makeGenerateCombinedPost(): (state: GlobalState, combinedId: string) => UserActivityPost {
     const getPostsForIds = makeGetPostsForIds();
     const getPostIds = memoizeResult(getPostIdsForCombinedUserActivityPost);
+    
 
     return createSelector(
         'makeGenerateCombinedPost',
@@ -365,11 +369,24 @@ function isUsersRelatedPost(postType: string) {
         postType === Posts.POST_TYPES.REMOVE_FROM_CHANNEL
     );
 }
+function mergeLastSimilarPosts(userActivities: ActivityEntry[]) {
+    const prevPost = userActivities[userActivities.length - 1];
+    const prePrevPost = userActivities[userActivities.length - 2]; 
+    const prevPostType = prevPost && prevPost.postType;
+    const prePrevPostType = prePrevPost && prePrevPost.postType;
+
+    if (prevPostType == prePrevPostType) {
+        userActivities.pop();
+        prePrevPost.actorId.push(...prevPost.actorId);
+    }
+}
+
 export function combineUserActivitySystemPost(systemPosts: Post[] = []) {
     if (systemPosts.length === 0) {
         return null;
     }
     const userActivities: ActivityEntry[] = [];
+    // console.log('SystemPosts::', systemPosts);
     systemPosts.reverse().forEach((post: Post) => {
         const postType = post.type;
         const actorId = post.user_id;
@@ -382,12 +399,28 @@ export function combineUserActivitySystemPost(systemPosts: Post[] = []) {
         const prevPost = userActivities[userActivities.length - 1];
         const isSamePostType = prevPost && prevPost.postType === post.type;
         const isSameActor = prevPost && prevPost.actorId[0] === post.user_id;
-
+        const isJoinedPrevPost = prevPost && prevPost.postType == Posts.POST_TYPES.JOIN_CHANNEL;
+        const isLeftCurPost = post.type === Posts.POST_TYPES.LEAVE_CHANNEL;
+        const prePrevPost = userActivities[userActivities.length - 2];
+        const isJoinedPrePrevPost = prePrevPost && prePrevPost.postType == Posts.POST_TYPES.JOIN_CHANNEL;
+        const isLeftPrevPost = prevPost && prevPost.postType == Posts.POST_TYPES.LEAVE_CHANNEL;
+        
         if (prevPost && isSamePostType && (isSameActor || isRemovedPost)) {
             prevPost.userIds.push(userId);
             prevPost.usernames.push(username);
         } else if (isSamePostType && !isSameActor && !isUsersRelatedPost(postType)) {
             prevPost.actorId.push(actorId);
+            const isSameActors = (prePrevPost && (prePrevPost.actorId.length === prevPost.actorId.length) && (prePrevPost.actorId.every(actor => prevPost.actorId.includes(actor))));
+            if(isJoinedPrePrevPost && isLeftPrevPost && isSameActors){
+                userActivities.pop();
+                prePrevPost.actorId.push(...prevPost.actorId);
+                prePrevPost.postType = Posts.POST_TYPES.JOIN_LEAVE_CHANNEL;
+                mergeLastSimilarPosts(userActivities);
+            }
+        } else if(isJoinedPrevPost && isLeftCurPost && isSameActor){
+            prevPost.actorId.push(actorId);
+            prevPost.postType = Posts.POST_TYPES.JOIN_LEAVE_CHANNEL;
+            mergeLastSimilarPosts(userActivities);
         } else {
             userActivities.push({
                 actorId: [actorId],
@@ -397,6 +430,7 @@ export function combineUserActivitySystemPost(systemPosts: Post[] = []) {
             });
         }
     });
+    //console.log('extractUserActivityData:', userActivities);
 
     return extractUserActivityData(userActivities);
 }
